@@ -50,23 +50,40 @@ def seed_items():
     cur = con.cursor()
 
     data = [
+        ("Marjan Strawberry", "ML", 4000, 800, 80),
+        ("Marjan Lychee", "ML", 4400, 800, 20),
+        ("Gula Aren", "ML", 3000, 2600, 130),
+        ("Calamansi", "ML", 5700, 2000, 50),
+        ("Fanta Soda", "ML", 5250, 1500, 130),
+        ("Gula Putih Cair", "ML", 4500, 1000, 1000),
+        ("Monin Green Apple", "ML", 3500, 700, 35),
+        ("Monin Wild Mint", "ML", 3500, 700, 35),
+        ("Monin Blue Lagoon", "ML", 3500, 700, 140),
+        ("Monin Tiramisu", "ML", 2100, 700, 35),
+        ("Sunquick Lemon", "ML", 3300, 900, 20),
+        ("Sunquick Orange", "ML", 3300, 900, 53),
+        ("Beans Espresso", "GR", 4000, 2000, 33),
+        ("Cocoa Powder", "GR", 2500, 1000, 50),
         ("Matcha", "GR", 2000, 1000, 20),
         ("Fresh Milk", "ML", 20900, 6000, 8),
         ("Susu Kental Manis", "ML", 490, 980, 16),
+        ("Strawberry", "GR", 2000, 1000, 10),
+        ("Naga", "GR", 2000, 1000, 8),
+        ("Mangga", "GR", 2000, 1000, 6),
+        ("Sirsak", "GR", 2000, 1000, 8),
     ]
+
+    cur.execute("DELETE FROM items")  # penting agar tidak dobel
 
     for d in data:
         cur.execute("""
-        INSERT OR IGNORE INTO items
-        (item, unit, current_stock, alarm_stock, portion)
+        INSERT INTO items (item, unit, current_stock, alarm_stock, portion)
         VALUES (?,?,?,?,?)
         """, d)
 
     con.commit()
     con.close()
 
-init_db()
-seed_items()
 
 # ================= AUTH =================
 def auth():
