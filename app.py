@@ -38,6 +38,7 @@ def init_db():
     con.commit()
     con.close()
 
+
 def seed_items():
     con = db()
     cur = con.cursor()
