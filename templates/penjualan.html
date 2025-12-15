@@ -1,21 +1,15 @@
-<!DOCTYPE html>
-<html>
-<body>
-
 <h2>Input Penjualan</h2>
 
-<form method="POST">
-  Menu:<br>
-  <input name="menu"><br><br>
+<form method="post">
+    Item:
+    <select name="item">
+        {% for i in items %}
+        <option value="{{ i[0] }}">{{ i[0] }}</option>
+        {% endfor %}
+    </select><br>
 
-  Qty Terjual:<br>
-  <input type="number" name="qty"><br><br>
-
-  <button type="submit">Simpan</button>
+    Qty: <input type="number" name="qty"><br>
+    <button type="submit">Simpan</button>
 </form>
 
 <a href="/dashboard">Kembali</a>
-
-</body>
-</html>
-
