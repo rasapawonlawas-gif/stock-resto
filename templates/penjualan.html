@@ -1,15 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Input Penjualan</title>
+</head>
+<body>
+
 <h2>Input Penjualan</h2>
 
 <form method="post">
-    Item:
-    <select name="item">
+    <label>Item:</label><br>
+    <select name="item" required>
         {% for i in items %}
-        <option value="{{ i[0] }}">{{ i[0] }}</option>
+            <option value="{{ i[0] }}">{{ i[0] }}</option>
         {% endfor %}
-    </select><br>
+    </select>
+    <br><br>
 
-    Qty: <input type="number" name="qty"><br>
+    <label>Qty (cup):</label><br>
+    <input type="number" name="qty" min="1" required>
+    <br><br>
+
     <button type="submit">Simpan</button>
 </form>
 
-<a href="/dashboard">Kembali</a>
+<br>
+<a href="/dashboard">⬅ Kembali ke Dashboard</a>
+
+</body>
+</html>
