@@ -1,7 +1,12 @@
-from flask import Flask, render_template, request, redirect, session
+from flask import Flask, render_template, request, redirect, session, send_file, jsonify
 import sqlite3
 from datetime import datetime
+import pandas as pd
+import smtplib
+import os
+from email.message import EmailMessage
 
+# ================= APP INIT =================
 app = Flask(__name__)
 app.secret_key = "secret123"
 
@@ -38,7 +43,6 @@ def init_db():
     con.commit()
     con.close()
 
-
 def seed_items():
     con = db()
     cur = con.cursor()
@@ -58,7 +62,7 @@ def seed_items():
         ("Sunquick Orange", "ML", 3300, 900, 53),
         ("Beans Espresso", "GR", 4000, 2000, 33),
         ("Cocoa Powder", "GR", 2500, 1000, 50),
-        ("Matcha", "GR", 2000, 1000, 50),
+        ("Matcha", "GR", 2000, 1000, 20),   # 1000gr = 50 cup → 20gr / cup
         ("Fresh Milk", "ML", 20900, 6000, 8),
         ("Susu Kental Manis", "ML", 490, 980, 16),
         ("Strawberry", "GR", 2000, 1000, 10),
@@ -69,7 +73,7 @@ def seed_items():
 
     for d in data:
         cur.execute("""
-        INSERT OR IGNORE INTO items 
+        INSERT OR IGNORE INTO items
         (item, unit, current_stock, alarm_stock, portion)
         VALUES (?,?,?,?,?)
         """, d)
@@ -88,7 +92,10 @@ def auth():
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        if request.form["username"] == OWNER_USERNAME and request.form["password"] == OWNER_PASSWORD:
+        if (
+            request.form["username"] == OWNER_USERNAME
+            and request.form["password"] == OWNER_PASSWORD
+        ):
             session["login"] = True
             return redirect("/dashboard")
     return render_template("login.html")
@@ -117,25 +124,99 @@ def penjualan():
         return redirect("/")
 
     con = db()
-    items = con.execute("SELECT item FROM items").fetchall()
+    cur = con.cursor()
+    items = cur.execute("SELECT item FROM items").fetchall()
 
     if request.method == "POST":
         item = request.form["item"]
         qty = int(request.form["qty"])
 
-        cur = con.cursor()
-        cur.execute(
-            "INSERT INTO sales (menu, qty, created_at) VALUES (?,?,?)",
-            (item, qty, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        )
-        con.commit()
-        con.close()
+        cur.execute("""
+            SELECT current_stock, portion
+            FROM items WHERE item = ?
+        """, (item,))
+        row = cur.fetchone()
 
+        if row:
+            current_stock, portion = row
+            used_stock = portion * qty
+            new_stock = current_stock - used_stock
+
+            if new_stock < 0:
+                con.close()
+                return "Stok tidak mencukupi"
+
+            cur.execute("""
+                UPDATE items
+                SET current_stock = ?
+                WHERE item = ?
+            """, (new_stock, item))
+
+            cur.execute("""
+                INSERT INTO sales (menu, qty, created_at)
+                VALUES (?,?,?)
+            """, (item, qty, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+
+            con.commit()
+
+        con.close()
         return redirect("/dashboard")
 
     con.close()
     return render_template("penjualan.html", items=items)
 
+# ================= EXCEL GENERATOR =================
+def generate_excel():
+    con = db()
+    df = pd.read_sql_query("""
+        SELECT
+            item AS Item,
+            current_stock || ' ' || unit AS 'Stok Bahan',
+            CAST(current_stock / portion AS INT) || ' cup' AS 'Cup Tersedia',
+            alarm_stock AS Alarm
+        FROM items
+    """, con)
+    con.close()
 
+    file_path = "stok_resto.xlsx"
+    df.to_excel(file_path, index=False)
+    return file_path
+
+# ================= EXPORT MANUAL =================
+@app.route("/export-excel")
+def export_excel():
+    if not auth():
+        return redirect("/")
+    file_path = generate_excel()
+    return send_file(file_path, as_attachment=True)
+
+# ================= AUTO EMAIL (LANGKAH 3) =================
+def send_email_report():
+    file_path = generate_excel()
+
+    msg = EmailMessage()
+    msg["Subject"] = f"Laporan Stok Resto - {datetime.now().strftime('%d-%m-%Y')}"
+    msg["From"] = os.getenv("EMAIL_USER")
+    msg["To"] = os.getenv("EMAIL_TO")
+    msg.set_content("Terlampir laporan stok resto terbaru (otomatis).")
+
+    with open(file_path, "rb") as f:
+        msg.add_attachment(
+            f.read(),
+            maintype="application",
+            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename="stok_resto.xlsx"
+        )
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(os.getenv("EMAIL_USER"), os.getenv("EMAIL_PASS"))
+        smtp.send_message(msg)
+
+@app.route("/send-report")
+def send_report():
+    send_email_report()
+    return jsonify({"status": "email sent"})
+
+# ================= RUN =================
 if __name__ == "__main__":
     app.run(debug=True)
