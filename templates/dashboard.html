@@ -1,28 +1,20 @@
-<!DOCTYPE html>
-<html>
-<body>
-
 <h2>Dashboard Stok</h2>
+
 <a href="/penjualan">Input Penjualan</a> |
 <a href="/logout">Logout</a>
 
-<table border="1" cellpadding="5">
+<table border="1">
 <tr>
-  <th>Item</th>
-  <th>Stok</th>
-  <th>Alarm</th>
+    <th>Item</th>
+    <th>Stok</th>
+    <th>Alarm</th>
 </tr>
 
 {% for i in items %}
-<tr>
-  <td>{{ i[0] }}</td>
-  <td>{{ i[2] }}</td>
-  <td>{{ i[3] }}</td>
+<tr {% if i[2] <= i[3] %} style="background:red;color:white" {% endif %}>
+    <td>{{ i[0] }}</td>
+    <td>{{ i[2] }} {{ i[1] }}</td>
+    <td>{{ i[3] }}</td>
 </tr>
 {% endfor %}
-
 </table>
-
-</body>
-</html>
-
