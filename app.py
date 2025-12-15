@@ -15,7 +15,9 @@ OWNER_PASSWORD = "Almer123"
 
 # ================= DATABASE =================
 def db():
-    return sqlite3.connect("database.db")
+    con = sqlite3.connect("database.db")
+    con.row_factory = sqlite3.Row
+    return con
 
 def init_db():
     con = db()
@@ -48,7 +50,7 @@ def seed_items():
     cur = con.cursor()
 
     data = [
-        ("Matcha", "GR", 2000, 1000, 20),   # 20gr per cup
+        ("Matcha", "GR", 2000, 1000, 20),
         ("Fresh Milk", "ML", 20900, 6000, 8),
         ("Susu Kental Manis", "ML", 490, 980, 16),
     ]
@@ -68,7 +70,7 @@ seed_items()
 
 # ================= AUTH =================
 def auth():
-    return session.get("login")
+    return session.get("login") is True
 
 # ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
@@ -113,6 +115,10 @@ def penjualan():
         item = request.form["item"]
         qty = int(request.form["qty"])
 
+        if qty <= 0:
+            con.close()
+            return "Qty tidak valid"
+
         cur.execute("""
             SELECT current_stock, portion
             FROM items WHERE item = ?
@@ -123,9 +129,8 @@ def penjualan():
             con.close()
             return "Item tidak ditemukan"
 
-        current_stock, portion = row
-        used_stock = portion * qty
-        new_stock = current_stock - used_stock
+        used_stock = row["portion"] * qty
+        new_stock = row["current_stock"] - used_stock
 
         if new_stock < 0:
             con.close()
@@ -149,7 +154,7 @@ def penjualan():
     con.close()
     return render_template("penjualan.html", items=items)
 
-# ================= AUTO REPORT (CSV) =================
+# ================= AUTO REPORT (CSV + EMAIL) =================
 @app.route("/send-report")
 def send_report():
     try:
@@ -160,33 +165,39 @@ def send_report():
         """).fetchall()
         con.close()
 
-        file_name = "stok_resto.csv"
+        file_path = "/tmp/stok_resto.csv"
 
-        with open(file_name, "w", newline="", encoding="utf-8") as f:
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["Item", "Unit", "Stok", "Alarm", "Porsi/Cup"])
             for r in rows:
-                writer.writerow(r)
+                writer.writerow([
+                    r["item"],
+                    r["unit"],
+                    r["current_stock"],
+                    r["alarm_stock"],
+                    r["portion"]
+                ])
 
         EMAIL_USER = os.getenv("EMAIL_USER")
         EMAIL_PASS = os.getenv("EMAIL_PASS")
         EMAIL_TO   = os.getenv("EMAIL_TO")
 
         if not EMAIL_USER or not EMAIL_PASS or not EMAIL_TO:
-            return {"error": "Email env not set"}, 500
+            return jsonify({"error": "Email env not set"}), 500
 
         msg = EmailMessage()
         msg["Subject"] = f"Laporan Stok Resto {datetime.now().strftime('%d-%m-%Y')}"
         msg["From"] = EMAIL_USER
         msg["To"] = EMAIL_TO
-        msg.set_content("Laporan stok otomatis terlampir (CSV).")
+        msg.set_content("Laporan stok otomatis terlampir.")
 
-        with open(file_name, "rb") as f:
+        with open(file_path, "rb") as f:
             msg.add_attachment(
                 f.read(),
                 maintype="text",
                 subtype="csv",
-                filename=file_name
+                filename="stok_resto.csv"
             )
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
