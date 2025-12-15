@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, redirect, session
 import sqlite3
 from datetime import datetime
 
-# ================= APP INIT =================
 app = Flask(__name__)
 app.secret_key = "secret123"
 
@@ -23,6 +22,14 @@ def init_db():
         unit TEXT,
         current_stock INTEGER,
         alarm_stock INTEGER
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS recipes (
+        menu TEXT,
+        item TEXT,
+        qty INTEGER
     )
     """)
 
@@ -82,7 +89,7 @@ def penjualan():
 
     if request.method == "POST":
         menu = request.form["menu"]
-        qty = int(request.form["qty"])
+        qty_jual = int(request.form["qty"])
 
         con = db()
         cur = con.cursor()
@@ -90,8 +97,20 @@ def penjualan():
         # simpan penjualan
         cur.execute(
             "INSERT INTO sales (menu, qty, created_at) VALUES (?,?,?)",
-            (menu, qty, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            (menu, qty_jual, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         )
+
+        # kurangi stok berdasarkan resep
+        recipes = cur.execute(
+            "SELECT item, qty FROM recipes WHERE menu=?",
+            (menu,),
+        ).fetchall()
+
+        for item, qty in recipes:
+            cur.execute(
+                "UPDATE items SET current_stock = current_stock - (? * ?) WHERE item=?",
+                (qty, qty_jual, item),
+            )
 
         con.commit()
         con.close()
@@ -102,4 +121,4 @@ def penjualan():
 
 # ================= RUN =================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
