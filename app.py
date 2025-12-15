@@ -21,15 +21,8 @@ def init_db():
         item TEXT PRIMARY KEY,
         unit TEXT,
         current_stock INTEGER,
-        alarm_stock INTEGER
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS recipes (
-        menu TEXT,
-        item TEXT,
-        qty INTEGER
+        alarm_stock INTEGER,
+        portion INTEGER
     )
     """)
 
@@ -45,7 +38,46 @@ def init_db():
     con.commit()
     con.close()
 
+def seed_items():
+    con = db()
+    cur = con.cursor()
+
+    data = [
+        ("Marjan Strawberry", "ML", 4000, 800, 80),
+        ("Marjan Lychee", "ML", 4400, 800, 20),
+        ("Gula Aren", "ML", 3000, 2600, 130),
+        ("Calamansi", "ML", 5700, 2000, 50),
+        ("Fanta Soda", "ML", 5250, 1500, 130),
+        ("Gula Putih Cair", "ML", 4500, 1000, 1000),
+        ("Monin Green Apple", "ML", 3500, 700, 35),
+        ("Monin Wild Mint", "ML", 3500, 700, 35),
+        ("Monin Blue Lagoon", "ML", 3500, 700, 140),
+        ("Monin Tiramisu", "ML", 2100, 700, 35),
+        ("Sunquick Lemon", "ML", 3300, 900, 20),
+        ("Sunquick Orange", "ML", 3300, 900, 53),
+        ("Beans Espresso", "GR", 4000, 2000, 33),
+        ("Cocoa Powder", "GR", 2500, 1000, 50),
+        ("Matcha", "GR", 2000, 1000, 50),
+        ("Fresh Milk", "ML", 20900, 6000, 8),
+        ("Susu Kental Manis", "ML", 490, 980, 16),
+        ("Strawberry", "GR", 2000, 1000, 10),
+        ("Naga", "GR", 2000, 1000, 8),
+        ("Mangga", "GR", 2000, 1000, 6),
+        ("Sirsak", "GR", 2000, 1000, 8),
+    ]
+
+    for d in data:
+        cur.execute("""
+        INSERT OR IGNORE INTO items 
+        (item, unit, current_stock, alarm_stock, portion)
+        VALUES (?,?,?,?,?)
+        """, d)
+
+    con.commit()
+    con.close()
+
 init_db()
+seed_items()
 
 # ================= AUTH =================
 def auth():
@@ -55,15 +87,11 @@ def auth():
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        if (
-            request.form["username"] == OWNER_USERNAME
-            and request.form["password"] == OWNER_PASSWORD
-        ):
+        if request.form["username"] == OWNER_USERNAME and request.form["password"] == OWNER_PASSWORD:
             session["login"] = True
             return redirect("/dashboard")
     return render_template("login.html")
 
-# ================= LOGOUT =================
 @app.route("/logout")
 def logout():
     session.clear()
@@ -88,28 +116,29 @@ def penjualan():
         return redirect("/")
 
     if request.method == "POST":
-        menu = request.form["menu"]
-        qty_jual = int(request.form["qty"])
+        item = request.form["item"]
+        qty = int(request.form["qty"])
 
         con = db()
         cur = con.cursor()
 
-        # simpan penjualan
-        cur.execute(
-            "INSERT INTO sales (menu, qty, created_at) VALUES (?,?,?)",
-            (menu, qty_jual, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-        )
+        # ambil porsi
+        cur.execute("SELECT portion, current_stock FROM items WHERE item=?", (item,))
+        row = cur.fetchone()
 
-        # kurangi stok berdasarkan resep
-        recipes = cur.execute(
-            "SELECT item, qty FROM recipes WHERE menu=?",
-            (menu,),
-        ).fetchall()
+        if row:
+            portion, stock = row
+            used = portion * qty
+            new_stock = stock - used
 
-        for item, qty in recipes:
             cur.execute(
-                "UPDATE items SET current_stock = current_stock - (? * ?) WHERE item=?",
-                (qty, qty_jual, item),
+                "UPDATE items SET current_stock=? WHERE item=?",
+                (new_stock, item)
+            )
+
+            cur.execute(
+                "INSERT INTO sales (menu, qty, created_at) VALUES (?,?,?)",
+                (item, qty, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             )
 
         con.commit()
@@ -117,8 +146,11 @@ def penjualan():
 
         return redirect("/dashboard")
 
-    return render_template("penjualan.html")
+    con = db()
+    items = con.execute("SELECT item FROM items").fetchall()
+    con.close()
 
-# ================= RUN =================
+    return render_template("penjualan.html", items=items)
+
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
