@@ -216,6 +216,53 @@ def send_email_report():
 def send_report():
     send_email_report()
     return jsonify({"status": "email sent"})
+import os
+import pandas as pd
+import smtplib
+from email.message import EmailMessage
+
+@app.route("/send-report")
+def send_report():
+    try:
+        # ambil data stok
+        con = db()
+        df = pd.read_sql_query("SELECT * FROM items", con)
+        con.close()
+
+        # simpan ke excel
+        file_name = "stok_resto.xlsx"
+        df.to_excel(file_name, index=False)
+
+        # email config
+        EMAIL_USER = os.environ.get("EMAIL_USER")
+        EMAIL_PASS = os.environ.get("EMAIL_PASS")
+        EMAIL_TO   = os.environ.get("EMAIL_TO")
+
+        if not EMAIL_USER or not EMAIL_PASS or not EMAIL_TO:
+            return {"error": "Email environment variable not set"}, 500
+
+        msg = EmailMessage()
+        msg["Subject"] = "Laporan Stok Resto Harian"
+        msg["From"] = EMAIL_USER
+        msg["To"] = EMAIL_TO
+        msg.set_content("Terlampir laporan stok terbaru.")
+
+        with open(file_name, "rb") as f:
+            msg.add_attachment(
+                f.read(),
+                maintype="application",
+                subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename=file_name
+            )
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.send_message(msg)
+
+        return {"status": "email sent"}
+
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 # ================= RUN =================
 if __name__ == "__main__":
