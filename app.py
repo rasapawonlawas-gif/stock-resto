@@ -116,42 +116,26 @@ def penjualan():
     if not auth():
         return redirect("/")
 
+    con = db()
+    items = con.execute("SELECT item FROM items").fetchall()
+
     if request.method == "POST":
         item = request.form["item"]
         qty = int(request.form["qty"])
 
-        con = db()
         cur = con.cursor()
-
-        # ambil porsi
-        cur.execute("SELECT portion, current_stock FROM items WHERE item=?", (item,))
-        row = cur.fetchone()
-
-        if row:
-            portion, stock = row
-            used = portion * qty
-            new_stock = stock - used
-
-            cur.execute(
-                "UPDATE items SET current_stock=? WHERE item=?",
-                (new_stock, item)
-            )
-
-            cur.execute(
-                "INSERT INTO sales (menu, qty, created_at) VALUES (?,?,?)",
-                (item, qty, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            )
-
+        cur.execute(
+            "INSERT INTO sales (menu, qty, created_at) VALUES (?,?,?)",
+            (item, qty, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        )
         con.commit()
         con.close()
 
         return redirect("/dashboard")
 
-    con = db()
-    items = con.execute("SELECT item FROM items").fetchall()
     con.close()
-
     return render_template("penjualan.html", items=items)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
